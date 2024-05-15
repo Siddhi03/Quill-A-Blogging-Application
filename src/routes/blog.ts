@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import {PrismaClient} from "@prisma/client/edge"
 import { withAccelerate } from '@prisma/extension-accelerate'
 import { verify } from "hono/jwt";
+import { createBlogInput, updateBlogInput } from "@jainsiddhi03/quill-common";
 
 
 export const blogRouter = new Hono<{
@@ -20,23 +21,36 @@ blogRouter.use("/*",async(c,next)=>{
         c.status(401);
         return c.json({error : "unauthorized"})
     }
-    // const token = authHeader.split(' ')[1];
-    console.log("vvv");
-    console.log(authHeader);
-    const user = await verify(authHeader, c.env.JWT_SECRET);
-    if(user){
-        c.set("userId", user.id);
-        await next();
-    }else{
+    try{
+        const user = await verify(authHeader, c.env.JWT_SECRET);
+        if(user){
+            c.set("userId", user.id);
+            await next();
+        }else{
+            c.status(403);
+            return c.json({
+                message: "You are not logged in"
+            })
+         }
+
+    }catch(e){
         c.status(403);
         return c.json({
             message: "You are not logged in"
         })
     }
+    
 })
 
 blogRouter.post('/', async(c) =>{
     const body = await c.req.json();
+    const {success} = createBlogInput.safeParse(body);
+    if(!success){
+        c.status(411);
+        return c.json({
+            message:"Inputs are not correct"
+        })
+    }
     const authorId =  c.get("userId");
     const prisma = new PrismaClient({
       datasourceUrl:c.env.DATABASE_URL,
@@ -58,6 +72,13 @@ blogRouter.post('/', async(c) =>{
   
 blogRouter.put('/', async(c)=>{
     const body = await c.req.json();
+    const {success} = updateBlogInput.safeParse(body);
+    if(!success){
+        c.status(411);
+        return c.json({
+            message:"Inputs are not correct"
+        })
+    }
     const prisma = new PrismaClient({
         datasourceUrl:c.env.DATABASE_URL,
       }).$extends(withAccelerate())
